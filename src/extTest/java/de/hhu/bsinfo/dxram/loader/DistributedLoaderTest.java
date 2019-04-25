@@ -45,7 +45,6 @@ public class DistributedLoaderTest {
     @TestInstance(runOnNodeIdx = 2)
     public void simpleTest(final DXRAM p_instance) throws InterruptedException {
         Thread.sleep(100);
-
         LoaderService loaderService = p_instance.getService(LoaderService.class);
 
         Class test = null;
@@ -54,7 +53,6 @@ public class DistributedLoaderTest {
         } catch (ClassNotFoundException e) {
             Assert.fail("Oups, classloading failed.");
         }
-
         Assert.assertNotNull(test);
 
         try {
@@ -63,6 +61,5 @@ public class DistributedLoaderTest {
         } catch (ClassNotFoundException e) {
             // this is nice
         }
-
     }
 }
