@@ -57,13 +57,13 @@ public class LoaderComponentConfig extends ModuleConfig {
      * The number of tries a peer executes getJar before a ClassNotFoundException is thrown.
      */
     @Expose
-    private final int m_maxTries = 2;
+    private final int m_maxTries = 3;
 
     /**
      * The time a peer is waiting, before a retry is executed, in milliseconds.
      */
     @Expose
-    public final int m_retryInterval = 500;
+    public final int m_retryInterval = 200;
 
     /**
      * If true, a superpeer forces a synchronisation,
@@ -71,6 +71,13 @@ public class LoaderComponentConfig extends ModuleConfig {
      */
     @Expose
     public final boolean m_forceSyncWhenNotFound = true;
+
+    /**
+     * If true, a superpeer forces a synchronisation with all superpeers,
+     * if a ClassRequests requests a class, that is not locally available.
+     */
+    @Expose
+    public final boolean m_syncFromAllSuperPeers = true;
 
 
     public LoaderComponentConfig() {

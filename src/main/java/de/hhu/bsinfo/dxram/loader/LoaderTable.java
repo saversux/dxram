@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.jar.JarEntry;
 import java.util.jar.JarInputStream;
 
@@ -34,16 +35,16 @@ import org.apache.logging.log4j.Logger;
  * @author Julien Bernhart, julien.bernhart@hhu.de, 2019-04-17
  */
 public class LoaderTable {
-    private HashMap<String, String> m_packageJarMap;
+    private ConcurrentHashMap<String, String> m_packageJarMap;
     @Getter
-    private HashMap<String, LoaderJar> m_jarByteArrays;
-    private HashMap<Short, String> m_distributedJars;
+    private ConcurrentHashMap<String, LoaderJar> m_jarByteArrays;
+    private ConcurrentHashMap<Short, String> m_distributedJars;
     private static final Logger LOGGER = LogManager.getFormatterLogger(LoaderTable.class);
 
     public LoaderTable() {
-        m_packageJarMap = new HashMap<>();
-        m_jarByteArrays = new HashMap<>();
-        m_distributedJars = new HashMap<>();
+        m_packageJarMap = new ConcurrentHashMap<>();
+        m_jarByteArrays = new ConcurrentHashMap<>();
+        m_distributedJars = new ConcurrentHashMap<>();
     }
 
     public void registerJarMap(LoaderJar[] p_loaderJars) {
@@ -154,8 +155,8 @@ public class LoaderTable {
      * Only for testing. Flushes all maps.
      */
     public void flushMaps() {
-        m_packageJarMap = new HashMap<>();
-        m_jarByteArrays = new HashMap<>();
+        m_packageJarMap = new ConcurrentHashMap<>();
+        m_jarByteArrays = new ConcurrentHashMap<>();
     }
 
     /**

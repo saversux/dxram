@@ -23,7 +23,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
@@ -74,12 +73,13 @@ public class LoaderComponent extends Component<LoaderComponentConfig> implements
     private Random m_random;
     private static final String CLASS_NOT_FOUND = "NOT_FOUND";
     private Path m_pluginPath;
+    private String m_loaderDir;
 
     /**
      * Clean folder with requested jars from loader
      */
     private void cleanLoaderDir() {
-        File dir = new File(getConfig().getLoaderDir());
+        File dir = new File(m_loaderDir);
 
         if (dir.isDirectory()) {
             for (File file : dir.listFiles()) {
@@ -104,15 +104,27 @@ public class LoaderComponent extends Component<LoaderComponentConfig> implements
         if (superPeers.isEmpty()) {
             LOGGER.info("Nothing to sync, only one superpeer.");
         }else {
-            int randomInt = getRandomInt(superPeers.size());
-            short id = superPeers.get(randomInt);
-            LOGGER.info(String.format("request loaderTable sync with %s", NodeID.toHexString(id)));
-            SyncRequestMessage syncRequestMessage = new SyncRequestMessage(id, m_loaderTable.getLoadedJars());
+            if (getConfig().m_syncFromAllSuperPeers) {
+                superPeers.stream().parallel().forEach(superPeer -> {
+                    SyncRequestMessage syncRequestMessage = new SyncRequestMessage(superPeer,
+                            m_loaderTable.getLoadedJars());
 
-            try {
-                m_net.sendMessage(syncRequestMessage);
-            } catch (NetworkException e) {
-                LOGGER.error(e);
+                    try {
+                        m_net.sendMessage(syncRequestMessage);
+                    } catch (NetworkException e) {
+                        LOGGER.error(e);
+                    }
+                });
+            } else {
+                short id = superPeers.get(getRandomInt(superPeers.size()));
+                LOGGER.info(String.format("request loaderTable sync with %s", NodeID.toHexString(id)));
+                SyncRequestMessage syncRequestMessage = new SyncRequestMessage(id, m_loaderTable.getLoadedJars());
+
+                try {
+                    m_net.sendMessage(syncRequestMessage);
+                } catch (NetworkException e) {
+                    LOGGER.error(e);
+                }
             }
         }
     }
@@ -193,15 +205,18 @@ public class LoaderComponent extends Component<LoaderComponentConfig> implements
         while(true) {
             try {
                 ClassRequestMessage requestMessage = new ClassRequestMessage(id, p_name);
-                m_net.sendSync(requestMessage, true);
+                m_net.sendSync(requestMessage, false);
 
+                while (null == requestMessage.getResponse()) {
+
+                }
                 ClassResponseMessage response = (ClassResponseMessage) requestMessage.getResponse();
 
                 if (CLASS_NOT_FOUND.equals(response.getM_loaderJar().getM_name())) {
                     throw new ClassNotFoundException();
                 }
 
-                Path jarPath = Paths.get(getConfig().getLoaderDir() + File.separator +
+                Path jarPath = Paths.get(m_loaderDir + File.separator +
                         response.getM_loaderJar().getM_name() + ".jar");
                 response.getM_loaderJar().writeToPath(jarPath);
 
@@ -270,12 +285,12 @@ public class LoaderComponent extends Component<LoaderComponentConfig> implements
      */
     private void updateApp(LoaderJar p_loaderJar) {
         try {
-            Files.write(Paths.get(getConfig().getLoaderDir() + File.separator + p_loaderJar.getM_name() + ".jar"),
+            Files.write(Paths.get(m_loaderDir + File.separator + p_loaderJar.getM_name() + ".jar"),
                     p_loaderJar.getM_jarBytes());
 
             DistributedLoader newLoader = new DistributedLoader(this);
             newLoader.initPlugins(m_pluginPath);
-            newLoader.initPlugins(Paths.get(getConfig().getLoaderDir()));
+            newLoader.initPlugins(Paths.get(m_loaderDir));
 
             m_loader = newLoader;
             LOGGER.info(String.format("Updated %s to version %s", p_loaderJar.getM_name(), p_loaderJar.getM_version()));
@@ -303,6 +318,7 @@ public class LoaderComponent extends Component<LoaderComponentConfig> implements
     protected boolean initComponent(DXRAMConfig p_config, DXRAMJNIManager p_jniManager) {
         PluginComponentConfig config = p_config.getComponentConfig(PluginComponent.class);
         m_pluginPath = Paths.get(config.getPluginsPath());
+        m_loaderDir = getConfig().getLoaderDir() + '_' + NodeID.toHexString(m_boot.getNodeId());
 
         m_random = new Random();
         m_role = p_config.getEngineConfig().getRole();
@@ -324,9 +340,9 @@ public class LoaderComponent extends Component<LoaderComponentConfig> implements
                 UpdateMessage.class);
 
         if (m_role == NodeRole.PEER) {
-            if (!Files.exists(Paths.get(getConfig().getLoaderDir()))) {
+            if (!Files.exists(Paths.get(m_loaderDir))) {
                 try {
-                    Files.createDirectory(Paths.get(getConfig().getLoaderDir()));
+                    Files.createDirectory(Paths.get(m_loaderDir));
                 } catch (IOException e) {
                     LOGGER.error("Could not create loaderDir.", e);
                 }
@@ -388,9 +404,13 @@ public class LoaderComponent extends Component<LoaderComponentConfig> implements
         ClassResponseMessage responseMessage;
         try {
             String jarName = m_loaderTable.getJarName(requestMessage.getM_packageName());
+            LoaderJar loaderJar = m_loaderTable.getLoaderJar(jarName);
 
-            LOGGER.info(String.format("Found %s in %s, sending ClassResponseMessage",
-                    requestMessage.getM_packageName(), jarName));
+            LOGGER.info(String.format("%s: Found %s in %s, sending ClassResponseMessage",
+                    NodeID.toHexString(m_boot.getNodeId()), requestMessage.getM_packageName(), jarName));
+            if (null == loaderJar) {
+                throw new NotInClusterException();
+            }
             responseMessage = new ClassResponseMessage(requestMessage, m_loaderTable.getLoaderJar(jarName));
             m_loaderTable.logClassRequest(requestMessage.getSource(), jarName);
 
@@ -398,7 +418,7 @@ public class LoaderComponent extends Component<LoaderComponentConfig> implements
             LOGGER.error("Class not found in cluster");
             responseMessage = new ClassResponseMessage(requestMessage, new LoaderJar(CLASS_NOT_FOUND));
             if (getConfig().m_forceSyncWhenNotFound) {
-                sync();
+                new Thread(this::sync).start();
             }
         }
 
