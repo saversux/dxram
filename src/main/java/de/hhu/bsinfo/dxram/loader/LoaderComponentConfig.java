@@ -39,7 +39,7 @@ public class LoaderComponentConfig extends ModuleConfig {
      * random superpeer
      */
     @Expose
-    private boolean m_randomRequest = true;
+    private boolean m_randomRequest = false;
 
     /**
      * If true, clients get the newest version of each application without request
@@ -77,7 +77,7 @@ public class LoaderComponentConfig extends ModuleConfig {
      * if a ClassRequests requests a class, that is not locally available.
      */
     @Expose
-    public final boolean m_syncFromAllSuperPeers = false;
+    public final boolean m_syncFromAllSuperPeers = true;
 
 
     public LoaderComponentConfig() {
